@@ -255,12 +255,15 @@ async def get_client():
                 except:
                     pass
             
-            # Try to load session string from SQLite session
-            session_file = f"{session_name}.session"
-            session_to_use = session_name
+            # Check if we have a saved session string in Streamlit secrets
+            session_string = st.secrets.get("SESSION_STRING", "")
+            session_to_use = StringSession(session_string) if session_string else session_name
             
-            # If SQLite session is locked, convert to StringSession
-            if os.path.exists(session_file):
+            # Try to load session string from SQLite session (local only)
+            session_file = f"{session_name}.session"
+            
+            # If SQLite session exists locally, use it
+            if os.path.exists(session_file) and not session_string:
                 try:
                     # Try to read the session with a short timeout
                     temp_client = TelegramClient(session_name, api_id, api_hash)
@@ -289,8 +292,27 @@ async def get_client():
                         st.error(f"Cannot access session file: {e}")
                         st.info("💡 Tip: Close any other programs using Telegram (including authenticate.py)")
                         return None
-            else:
-                st.error("Session file not found. Please run: python authenticate.py")
+            elif not session_string:
+                # No session file and no session string - need authentication
+                st.error("❌ No session found. Please authenticate first.")
+                st.info("**For cloud deployment:** Add your `SESSION_STRING` to Streamlit secrets")
+                st.info("**For local use:** Run `python authenticate.py` to create session.session file")
+                
+                # Show how to get session string
+                with st.expander("🔑 How to get SESSION_STRING"):
+                    st.code("""
+# Run this script locally to get your SESSION_STRING:
+
+from telethon.sync import TelegramClient
+from telethon.sessions import StringSession
+
+api_id = YOUR_API_ID
+api_hash = "YOUR_API_HASH"
+
+with TelegramClient(StringSession(), api_id, api_hash) as client:
+    print("Your SESSION_STRING:")
+    print(client.session.save())
+""", language="python")
                 return None
             
             # Create new client with the selected session
