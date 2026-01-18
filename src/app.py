@@ -838,10 +838,6 @@ with st.sidebar:
     else:
         st.session_state.convert_videos = convert_videos
     
-    if not Path(FFMPEG_PATH).exists():
-        st.warning("⚠️ FFmpeg not found. Video conversion disabled.")
-        st.caption("Run setup_ffmpeg.py to enable conversion")
-    
     st.markdown("---")
     
     fetch_button = st.button("🔍 Fetch Media", type="primary")
@@ -1106,39 +1102,30 @@ if st.session_state.media_list:
     if selected_items:
         st.markdown("---")
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button(f"📥 Download Selected ({len(selected_items)} files)", type="primary", use_container_width=True):
-                progress_container = st.container()
-                channel_id, _ = parse_channel_url(channel_url)
-                topic_for_selected = st.session_state.selected_topic if st.session_state.selected_topic != "All" else None
-                asyncio.run(download_files(channel_id, selected_items, progress_container, topic_for_selected, concurrent_downloads))
-        
-        with col2:
-            if st.button(f"📦 Export as ZIP ({len(selected_items)} files)", type="secondary", use_container_width=True):
-                progress_container = st.container()
-                channel_id, _ = parse_channel_url(channel_url)
-                
-                # Create ZIP filename
-                channel_name = st.session_state.channel_info['title'].replace(' ', '_').replace('/', '_')
-                topic_suffix = f"_{st.session_state.selected_topic.replace(' ', '_')}" if st.session_state.selected_topic != "All" else ""
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                zip_filename = f"{channel_name}{topic_suffix}_{timestamp}.zip"
-                
-                topic_for_selected = st.session_state.selected_topic if st.session_state.selected_topic != "All" else None
-                zip_path = asyncio.run(export_as_zip(channel_id, selected_items, zip_filename, progress_container, topic_for_selected))
-                
-                if zip_path and os.path.exists(zip_path):
-                    # Provide download button
-                    with open(zip_path, "rb") as file:
-                        st.download_button(
-                            label="⬇️ Download ZIP File",
-                            data=file,
-                            file_name=zip_filename,
-                            mime="application/zip",
-                            type="primary"
-                        )
+        if st.button(f"📦 Download as ZIP ({len(selected_items)} files)", type="primary", use_container_width=True):
+            progress_container = st.container()
+            channel_id, _ = parse_channel_url(channel_url)
+            
+            # Create ZIP filename
+            channel_name = st.session_state.channel_info['title'].replace(' ', '_').replace('/', '_')
+            topic_suffix = f"_{st.session_state.selected_topic.replace(' ', '_')}" if st.session_state.selected_topic != "All" else ""
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            zip_filename = f"{channel_name}{topic_suffix}_{timestamp}.zip"
+            
+            topic_for_selected = st.session_state.selected_topic if st.session_state.selected_topic != "All" else None
+            zip_path = asyncio.run(export_as_zip(channel_id, selected_items, zip_filename, progress_container, topic_for_selected))
+            
+            if zip_path and os.path.exists(zip_path):
+                # Provide download button
+                with open(zip_path, "rb") as file:
+                    st.download_button(
+                        label="⬇️ Download ZIP File",
+                        data=file,
+                        file_name=zip_filename,
+                        mime="application/zip",
+                        type="primary",
+                        use_container_width=True
+                    )
 
 else:
     st.info("👈 Enter a channel URL in the sidebar and click 'Fetch Media' to get started!")
