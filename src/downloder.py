@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 from dotenv import load_dotenv
 from colorama import Fore, Style
 from tqdm.asyncio import tqdm
@@ -48,7 +49,7 @@ async def download_file(message, folder_name, progress_bars):
 
         # Download media with progress
         await message.download_media(
-            file=f"./{folder_name}/",
+            file=f"downloads/{folder_name}/",
             progress_callback=lambda current, total: (
                 progress_bar.update(current - progress_bar.n) if total else None
             ),
@@ -79,14 +80,47 @@ async def download_in_batches(messages, folder_name, batch_size):
             tasks.clear()  # Clear tasks after each batch
 
 
+def parse_channel_input(user_input):
+    """Parse channel input to extract channel ID or username.
+    Supports:
+    - Channel usernames: @channelname or channelname
+    - t.me links: https://t.me/channelname
+    - Web Telegram links: https://web.telegram.org/a/#-1002381311281
+    - Direct channel IDs: -1002381311281
+    """
+    user_input = user_input.strip()
+    
+    # Check for web.telegram.org URLs with channel ID
+    web_match = re.search(r'web\.telegram\.org/[^#]*#(-?\d+)', user_input)
+    if web_match:
+        return int(web_match.group(1))
+    
+    # Check for t.me links
+    tme_match = re.search(r't\.me/([^/?]+)', user_input)
+    if tme_match:
+        return tme_match.group(1)
+    
+    # Check if it's a direct channel ID (numeric)
+    if re.match(r'^-?\d+$', user_input):
+        return int(user_input)
+    
+    # Remove @ if present and return username
+    return user_input.lstrip('@')
+
+
 async def main():
     async with TelegramClient(session_name, api_id, api_hash) as client:
         print(f"{Fore.GREEN}Connected successfully!{Style.RESET_ALL}")
-        channel_username = input(
-            f"{Fore.CYAN}Enter the channel name or username: {Style.RESET_ALL}"
+        user_input = input(
+            f"{Fore.CYAN}Enter the channel URL, username, or ID: {Style.RESET_ALL}"
         )
+        
+        # Parse the input to get channel identifier
+        channel_identifier = parse_channel_input(user_input)
+        print(f"{Fore.YELLOW}Parsed identifier: {channel_identifier}{Style.RESET_ALL}")
+        
         # Get the channel entity
-        channel = await client.get_entity(channel_username)
+        channel = await client.get_entity(channel_identifier)
         print(
             f"{Fore.YELLOW}Fetched channel: {channel.title} (ID: {channel.id}){Style.RESET_ALL}"
         )
