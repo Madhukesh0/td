@@ -1,4 +1,29 @@
-venv/*
+# Python
+*.pyc
+__pycache__/
+venv/
+.venv/
+
+# Environment
 .env
-test.session
-test.session-journal
+.env.local
+*.env
+
+# Session files
+*.session
+*.session-journal
+
+# Downloads
+downloads/
+*.zip
+
+# FFmpeg binaries (too large for GitHub, installed via packages.txt on cloud)
+ffmpeg/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
