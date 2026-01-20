@@ -604,6 +604,9 @@ async def download_files(channel_identifier, message_ids, progress_container, to
             for i in range(0, len(download_queue), concurrent):
                 batch = download_queue[i:i+concurrent]
                 
+                # Respect manual pause between batches
+                await wait_if_paused(overall_status)
+
                 # Start concurrent downloads - create tasks properly
                 tasks = [
                     asyncio.create_task(download_single_file(client, channel, msg, folder, file_num, file_info, progress_dict, file_id))
@@ -613,6 +616,8 @@ async def download_files(channel_identifier, message_ids, progress_container, to
                 # Monitor progress while downloading
                 done_tasks = set()
                 while len(done_tasks) < len(tasks):
+                    # Respect manual pause during active downloads
+                    await wait_if_paused(overall_status)
                     await asyncio.sleep(0.3)
                     
                     # Update UI
@@ -745,6 +750,7 @@ async def export_as_zip(channel_identifier, message_ids, zip_name, progress_cont
                     last_update_time = start_time
                     
                     def progress_callback(current, total_size):
+                        block_if_paused()
                         nonlocal last_update_time
                         current_time = time.time()
                         
@@ -764,6 +770,7 @@ async def export_as_zip(channel_identifier, message_ids, zip_name, progress_cont
                     # Download to temp directory
                     file_number = str(idx + 1).zfill(3)
                     custom_name = f"{file_number}_{file_info['name']}"
+                    await wait_if_paused(overall_status)
                     file_path = await message.download_media(
                         file=f"{temp_dir}/{custom_name}",
                         progress_callback=progress_callback
@@ -875,6 +882,8 @@ if 'selected_topic' not in st.session_state:
     st.session_state.selected_topic = "All"
 if 'topic_names' not in st.session_state:
     st.session_state.topic_names = {}
+if 'download_paused' not in st.session_state:
+    st.session_state.download_paused = False
 
 # Fetch media
 if fetch_button and channel_url:
@@ -960,6 +969,16 @@ if st.session_state.media_list:
         filtered_media = [m for m in filtered_by_topic if m["type"] == filter_type]
     
     st.write(f"Showing {len(filtered_media)} files")
+    
+    # Download control center
+    control_col1, control_col2 = st.columns(2)
+    with control_col1:
+        if st.button("⏸️ Pause Downloads", disabled=st.session_state.download_paused):
+            st.session_state.download_paused = True
+    with control_col2:
+        if st.button("▶️ Resume Downloads", disabled=not st.session_state.download_paused):
+            st.session_state.download_paused = False
+    st.caption(f"Download status: {'Paused' if st.session_state.download_paused else 'Running'}")
     
     # Batch download option with organized folders
     col1, col2, col3 = st.columns([2, 2, 1])
