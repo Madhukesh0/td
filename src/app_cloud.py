@@ -142,6 +142,25 @@ def format_time(seconds):
         return f"{hours}h {minutes}m"
 
 
+def is_download_paused():
+    """Check whether downloads are currently paused."""
+    return st.session_state.get('download_paused', False)
+
+
+async def wait_if_paused(status_placeholder=None):
+    """Async pause helper so downloads can be resumed manually."""
+    while is_download_paused():
+        if status_placeholder:
+            status_placeholder.markdown("⏸️ Downloads paused. Click Resume to continue.")
+        await asyncio.sleep(0.3)
+
+
+def block_if_paused():
+    """Sync pause helper for callbacks that cannot await."""
+    while is_download_paused():
+        time.sleep(0.3)
+
+
 async def get_client(api_id, api_hash, session_string=None, phone=None, code=None):
     """Create or connect to Telegram client with user credentials"""
     try:
@@ -272,6 +291,7 @@ async def download_single_file(client, channel, message, folder, file_number, fi
         }
         
         def progress_callback(current, total):
+            block_if_paused()
             elapsed = time.time() - start_time
             progress_dict[file_id]['downloaded'] = current
             progress_dict[file_id]['total'] = total
@@ -366,6 +386,9 @@ async def download_files(client, channel, message_ids, topic_name, progress_cont
             for i in range(0, len(download_queue), concurrent):
                 batch = download_queue[i:i+concurrent]
                 
+                # Respect manual pause between batches
+                await wait_if_paused(overall_status)
+                
                 tasks = [
                     asyncio.create_task(download_single_file(client, channel, msg, folder, file_num, file_info, progress_dict, file_id, convert_videos))
                     for msg, file_num, file_info, file_id in batch
@@ -373,6 +396,8 @@ async def download_files(client, channel, message_ids, topic_name, progress_cont
                 
                 done_tasks = set()
                 while len(done_tasks) < len(tasks):
+                    # Respect manual pause during active downloads
+                    await wait_if_paused(overall_status)
                     await asyncio.sleep(0.3)
                     
                     active_files = []
@@ -458,6 +483,8 @@ if 'media_list' not in st.session_state:
     st.session_state.media_list = []
 if 'channel_info' not in st.session_state:
     st.session_state.channel_info = None
+if 'download_paused' not in st.session_state:
+    st.session_state.download_paused = False
 
 # Sidebar - Authentication
 with st.sidebar:
@@ -600,6 +627,16 @@ if st.session_state.authenticated:
             display_messages = st.session_state.topics_structure[selected_topic]
         
         st.info(f"📊 {len(display_messages)} files")
+        
+        # Download control center
+        control_col1, control_col2 = st.columns(2)
+        with control_col1:
+            if st.button("⏸️ Pause Downloads", disabled=st.session_state.download_paused):
+                st.session_state.download_paused = True
+        with control_col2:
+            if st.button("▶️ Resume Downloads", disabled=not st.session_state.download_paused):
+                st.session_state.download_paused = False
+        st.caption(f"Download status: {'⏸️ Paused' if st.session_state.download_paused else '▶️ Running'}")
         
         # Media list
         selected_ids = []
